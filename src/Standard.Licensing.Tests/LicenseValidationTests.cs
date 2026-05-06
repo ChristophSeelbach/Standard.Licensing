@@ -37,26 +37,53 @@ namespace Standard.Licensing.Tests
     [TestFixture]
     public class LicenseValidationTests
     {
+        private License _expiredLicense;
+        private License _notExpiredLicense;
+
+        private static readonly DateTime ExpirationUtc = new DateTime(1899, 12, 31, 0, 0, 0, DateTimeKind.Utc);
+        private static readonly DateTime NotExpiredExpirationUtc = new DateTime(2100, 12, 31, 0, 0, 0, DateTimeKind.Utc);
+
+        [SetUp]
+        public void SetUp()
+        {
+            var passPhrase = Guid.NewGuid().ToString();
+            var keyGenerator = Security.Cryptography.KeyGenerator.Create();
+            var keyPair = keyGenerator.GenerateKeyPair();
+            var privateKey = keyPair.ToEncryptedPrivateKeyString(passPhrase);
+
+            _expiredLicense = License.New()
+                .WithUniqueIdentifier(new Guid("77d4c193-6088-4c64-9663-ed7398ae8c1a"))
+                .As(LicenseType.Trial)
+                .ExpiresAt(ExpirationUtc)
+                .WithMaximumUtilization(1)
+                .LicensedTo("John Doe", "john@doe.tld")
+                .CreateAndSignWithPrivateKey(privateKey, passPhrase);
+
+            _notExpiredLicense = License.New()
+                .WithUniqueIdentifier(new Guid("77d4c193-6088-4c64-9663-ed7398ae8c1a"))
+                .As(LicenseType.Trial)
+                .ExpiresAt(NotExpiredExpirationUtc)
+                .WithMaximumUtilization(1)
+                .LicensedTo("John Doe", "john@doe.tld")
+                .CreateAndSignWithPrivateKey(privateKey, passPhrase);
+        }
+
         [Test]
         public void Can_Validate_Valid_Signature()
         {
-            var publicKey =
-                @"MIIBKjCB4wYHKoZIzj0CATCB1wIBATAsBgcqhkjOPQEBAiEA/////wAAAAEAAAAAAAAAAAAAAAD///////////////8wWwQg/////wAAAAEAAAAAAAAAAAAAAAD///////////////wEIFrGNdiqOpPns+u9VXaYhrxlHQawzFOw9jvOPD4n0mBLAxUAxJ02CIbnBJNqZnjhE50mt4GffpAEIQNrF9Hy4SxCR/i85uVjpEDydwN9gS3rM6D0oTlF2JjClgIhAP////8AAAAA//////////+85vqtpxeehPO5ysL8YyVRAgEBA0IABNVLQ1xKY80BFMgGXec++Vw7n8vvNrq32PaHuBiYMm0PEj2JoB7qSSWhfgcjxNVJsxqJ6gDQVWgl0r7LH4dr0KU=";
-            var licenseData = @"<License>
-                                  <Id>77d4c193-6088-4c64-9663-ed7398ae8c1a</Id>
-                                  <Type>Trial</Type>
-                                  <Expiration>Sun, 31 Dec 1899 23:00:00 GMT</Expiration>
-                                  <Quantity>1</Quantity>
-                                  <Customer>
-                                    <Name>John Doe</Name>
-                                    <Email>john@doe.tld</Email>
-                                  </Customer>
-                                  <LicenseAttributes />
-                                  <ProductFeatures />
-                                  <Signature>MEUCIQCCEDAldOZHHIKvYZRDdzUP4V51y23d6deeK5jIFy27GQIgDz2CndjBh4Vb8tiC3FGQ6fn3GKt8d/P5+luJH0cWv+I=</Signature>
-                                </License>";
+            var passPhrase = Guid.NewGuid().ToString();
+            var keyGenerator = Security.Cryptography.KeyGenerator.Create();
+            var keyPair = keyGenerator.GenerateKeyPair();
+            var privateKey = keyPair.ToEncryptedPrivateKeyString(passPhrase);
+            var publicKey = keyPair.ToPublicKeyString();
 
-            var license = License.Load(licenseData);
+			   License license = License.New()
+                .WithUniqueIdentifier(new Guid("77d4c193-6088-4c64-9663-ed7398ae8c1a"))
+                .As(LicenseType.Trial)
+                .ExpiresAt(new DateTime(1899, 12, 31, 0, 0, 0, DateTimeKind.Utc))
+                .WithMaximumUtilization(1)
+                .LicensedTo("John Doe", "john@doe.tld")
+                .CreateAndSignWithPrivateKey(privateKey, passPhrase);
 
             var validationResults = license
                 .Validate()
@@ -70,25 +97,23 @@ namespace Standard.Licensing.Tests
         [Test]
         public void Can_Validate_Invalid_Signature()
         {
-            var publicKey =
-                @"MIIBKjCB4wYHKoZIzj0CATCB1wIBATAsBgcqhkjOPQEBAiEA/////wAAAAEAAAAAAAAAAAAAAAD///////////////8wWwQg/////wAAAAEAAAAAAAAAAAAAAAD///////////////wEIFrGNdiqOpPns+u9VXaYhrxlHQawzFOw9jvOPD4n0mBLAxUAxJ02CIbnBJNqZnjhE50mt4GffpAEIQNrF9Hy4SxCR/i85uVjpEDydwN9gS3rM6D0oTlF2JjClgIhAP////8AAAAA//////////+85vqtpxeehPO5ysL8YyVRAgEBA0IABNVLQ1xKY80BFMgGXec++Vw7n8vvNrq32PaHuBiYMm0PEj2JoB7qSSWhfgcjxNVJsxqJ6gDQVWgl0r7LH4dr0KU=";
-            var licenseData = @"<License>
-                                  <Id>77d4c193-6088-4c64-9663-ed7398ae8c1a</Id>
-                                  <Type>Trial</Type>
-                                  <Expiration>Sun, 31 Dec 1899 23:00:00 GMT</Expiration>
-                                  <Quantity>999</Quantity>
-                                  <Customer>
-                                    <Name>John Doe</Name>
-                                    <Email>john@doe.tld</Email>
-                                  </Customer>
-                                  <LicenseAttributes />
-                                  <ProductFeatures />
-                                  <Signature>MEUCIQCCEDAldOZHHIKvYZRDdzUP4V51y23d6deeK5jIFy27GQIgDz2CndjBh4Vb8tiC3FGQ6fn3GKt8d/P5+luJH0cWv+I=</Signature>
-                                </License>";
+            var passPhrase = Guid.NewGuid().ToString();
+            var keyGenerator = Security.Cryptography.KeyGenerator.Create();
+            var keyPair = keyGenerator.GenerateKeyPair();
+            var privateKey = keyPair.ToEncryptedPrivateKeyString(passPhrase);
+            var publicKey = keyPair.ToPublicKeyString();
 
-            var license = License.Load(licenseData);
+			   License license = License.New()
+                .WithUniqueIdentifier(new Guid("77d4c193-6088-4c64-9663-ed7398ae8c1a"))
+                .As(LicenseType.Trial)
+                .ExpiresAt(new DateTime(1899, 12, 31, 0, 0, 0, DateTimeKind.Utc))
+                .WithMaximumUtilization(1)
+                .LicensedTo("John Doe", "john@doe.tld")
+                .CreateAndSignWithPrivateKey(privateKey, passPhrase);
 
-            var validationResults = license
+			   License tamperedLicense = License.Load(license.ToString().Replace("<Quantity>1</Quantity>", "<Quantity>999</Quantity>"));
+
+            var validationResults = tamperedLicense
                 .Validate()
                 .Signature(publicKey)
                 .AssertValidLicense().ToList();
@@ -101,24 +126,9 @@ namespace Standard.Licensing.Tests
         [Test]
         public void Can_Validate_Expired_ExpirationDate()
         {
-            var publicKey = "";
-            var licenseData = @"<License>
-                                  <Id>77d4c193-6088-4c64-9663-ed7398ae8c1a</Id>
-                                  <Type>Trial</Type>
-                                  <Expiration>Sun, 31 Dec 1899 23:00:00 GMT</Expiration>
-                                  <Quantity>1</Quantity>
-                                  <Customer>
-                                    <Name>John Doe</Name>
-                                    <Email>john@doe.tld</Email>
-                                  </Customer>
-                                  <LicenseAttributes />
-                                  <ProductFeatures />
-                                  <Signature>MEUCIQCCEDAldOZHHIKvYZRDdzUP4V51y23d6deeK5jIFy27GQIgDz2CndjBh4Vb8tiC3FGQ6fn3GKt8d/P5+luJH0cWv+I=</Signature>
-                                </License>";
+            Assert.That(_expiredLicense.Expiration.Kind, Is.EqualTo(DateTimeKind.Utc));
 
-            var license = License.Load(licenseData);
-
-            var validationResults = license
+            var validationResults = _expiredLicense
                 .Validate()
                 .ExpirationDate()
                 .AssertValidLicense().ToList();
@@ -126,65 +136,128 @@ namespace Standard.Licensing.Tests
             Assert.That(validationResults, Is.Not.Null);
             Assert.That(validationResults.Count(), Is.EqualTo(1));
             Assert.That(validationResults.FirstOrDefault(), Is.TypeOf<LicenseExpiredValidationFailure>());
-
         }
 
         [Test]
-        public void Can_Validate_Expired_ExpirationDate_CustomDateTime()
+        public void Can_Validate_NotExpired_ExpirationDate()
         {
-            var publicKey = "";
-            var licenseData = @"<License>
-                                  <Id>77d4c193-6088-4c64-9663-ed7398ae8c1a</Id>
-                                  <Type>Trial</Type>
-                                  <Expiration>Sun, 31 Dec 1899 23:00:00 GMT</Expiration>
-                                  <Quantity>1</Quantity>
-                                  <Customer>
-                                    <Name>John Doe</Name>
-                                    <Email>john@doe.tld</Email>
-                                  </Customer>
-                                  <LicenseAttributes />
-                                  <ProductFeatures />
-                                  <Signature>MEUCIQCCEDAldOZHHIKvYZRDdzUP4V51y23d6deeK5jIFy27GQIgDz2CndjBh4Vb8tiC3FGQ6fn3GKt8d/P5+luJH0cWv+I=</Signature>
-                                </License>";
+            Assert.That(_notExpiredLicense.Expiration.Kind, Is.EqualTo(DateTimeKind.Utc));
 
-            var license = License.Load(licenseData);
-
-            var validationResults = license
+            var validationResults = _notExpiredLicense
                 .Validate()
-                .ExpirationDate(systemDateTime: new DateTime(1900, 1, 2, 0, 0, 0, DateTimeKind.Utc))
+                .ExpirationDate()
+                .AssertValidLicense().ToList();
+
+            Assert.That(validationResults, Is.Not.Null);
+            Assert.That(validationResults.Count(), Is.EqualTo(0));
+        }
+
+        public static IEnumerable<TestCaseData> LocalAndUtcExpired
+        {
+            get
+            {
+                var expirationLocalDate = new DateTime(ExpirationUtc.Year, ExpirationUtc.Month, ExpirationUtc.Day, 0, 0, 0, DateTimeKind.Local);
+                var expirationLocalDateAtOneMinutePastMidnight = expirationLocalDate.AddMinutes(1);
+                var expirationLocalDateAtThirtyMinutesPastMidnight = expirationLocalDate.AddMinutes(30);
+                var expirationLocalDateAtNoon = expirationLocalDate.AddHours(12);
+                var expirationLocalDateTomorrow = expirationLocalDate.AddDays(1);
+
+                yield return new TestCaseData(expirationLocalDate);
+                yield return new TestCaseData(expirationLocalDateAtOneMinutePastMidnight);
+                yield return new TestCaseData(expirationLocalDateAtThirtyMinutesPastMidnight);
+                yield return new TestCaseData(expirationLocalDateAtNoon);
+                yield return new TestCaseData(expirationLocalDateTomorrow);
+
+                yield return new TestCaseData(expirationLocalDate.ToUniversalTime());
+                yield return new TestCaseData(expirationLocalDateAtOneMinutePastMidnight.ToUniversalTime());
+                yield return new TestCaseData(expirationLocalDateAtThirtyMinutesPastMidnight.ToUniversalTime());
+                yield return new TestCaseData(expirationLocalDateAtNoon.ToUniversalTime());
+                yield return new TestCaseData(expirationLocalDateTomorrow.ToUniversalTime());
+            }
+        }
+
+        [Test, TestCaseSource(nameof(LocalAndUtcExpired))]
+        public void Can_Validate_Expired_ExpirationDate_CustomDateTime(DateTime currentDate)
+        {
+            Assert.That(_expiredLicense.Expiration.Kind, Is.EqualTo(DateTimeKind.Utc));
+
+            var validationResults = _expiredLicense
+                .Validate()
+                .ExpirationDate(systemDateTime: currentDate)
                 .AssertValidLicense().ToList();
 
             Assert.That(validationResults, Is.Not.Null);
             Assert.That(validationResults.Count(), Is.EqualTo(1));
             Assert.That(validationResults.FirstOrDefault(), Is.TypeOf<LicenseExpiredValidationFailure>());
+        }
 
+        public static IEnumerable<TestCaseData> LocalAndUtcNotExpired
+        {
+            get
+            {
+                var dayBeforeExpirationLocalDate = new DateTime(ExpirationUtc.Year, ExpirationUtc.Month, ExpirationUtc.Day, 0, 0, 0, DateTimeKind.Local).AddDays(-1);
+                var dayBeforeExpirationLocalDateAtOneMinutePastMidnight = dayBeforeExpirationLocalDate.AddMinutes(1);
+                var dayBeforeExpirationLocalDateAtThirtyMinutesPastMidnight = dayBeforeExpirationLocalDate.AddMinutes(30);
+                var dayBeforeExpirationLocalDateAtNoon = dayBeforeExpirationLocalDate.AddHours(12);
+                var dayBeforeExpirationLocalDateAtThirtyMinutesBeforeMidnight = dayBeforeExpirationLocalDate.AddHours(23).AddMinutes(30);
+                var dayBeforeExpirationLocalDateAtOneMinuteBeforeMidnight = dayBeforeExpirationLocalDate.AddHours(23).AddMinutes(59);
+
+                yield return new TestCaseData(dayBeforeExpirationLocalDate);
+                yield return new TestCaseData(dayBeforeExpirationLocalDateAtOneMinutePastMidnight);
+                yield return new TestCaseData(dayBeforeExpirationLocalDateAtThirtyMinutesPastMidnight);
+                yield return new TestCaseData(dayBeforeExpirationLocalDateAtNoon);
+                yield return new TestCaseData(dayBeforeExpirationLocalDateAtThirtyMinutesBeforeMidnight);
+                yield return new TestCaseData(dayBeforeExpirationLocalDateAtOneMinuteBeforeMidnight);
+
+                yield return new TestCaseData(dayBeforeExpirationLocalDate.ToUniversalTime());
+                yield return new TestCaseData(dayBeforeExpirationLocalDateAtOneMinutePastMidnight.ToUniversalTime());
+                yield return new TestCaseData(dayBeforeExpirationLocalDateAtThirtyMinutesPastMidnight.ToUniversalTime());
+                yield return new TestCaseData(dayBeforeExpirationLocalDateAtNoon.ToUniversalTime());
+                yield return new TestCaseData(dayBeforeExpirationLocalDateAtThirtyMinutesBeforeMidnight.ToUniversalTime());
+                yield return new TestCaseData(dayBeforeExpirationLocalDateAtOneMinuteBeforeMidnight.ToUniversalTime());
+            }
+        }
+
+        [Test, TestCaseSource(nameof(LocalAndUtcNotExpired))]
+        public void Can_Validate_NotExpired_ExpirationDate_CustomDateTime(DateTime currentDate)
+        {
+            Assert.That(_expiredLicense.Expiration.Kind, Is.EqualTo(DateTimeKind.Utc));
+
+            var validationResults = _expiredLicense
+                .Validate()
+                .ExpirationDate(systemDateTime: currentDate)
+                .AssertValidLicense().ToList();
+
+            Assert.That(validationResults, Is.Not.Null);
+            Assert.That(validationResults.Count(), Is.EqualTo(0));
         }
 
         [Test]
         public void Can_Validate_CustomAssertion()
         {
-            var publicKey = @"MIIBKjCB4wYHKoZIzj0CATCB1wIBATAsBgcqhkjOPQEBAiEA/////wAAAAEAAAAAAAAAAAAAAAD///////////////8wWwQg/////wAAAAEAAAAAAAAAAAAAAAD///////////////wEIFrGNdiqOpPns+u9VXaYhrxlHQawzFOw9jvOPD4n0mBLAxUAxJ02CIbnBJNqZnjhE50mt4GffpAEIQNrF9Hy4SxCR/i85uVjpEDydwN9gS3rM6D0oTlF2JjClgIhAP////8AAAAA//////////+85vqtpxeehPO5ysL8YyVRAgEBA0IABNVLQ1xKY80BFMgGXec++Vw7n8vvNrq32PaHuBiYMm0PEj2JoB7qSSWhfgcjxNVJsxqJ6gDQVWgl0r7LH4dr0KU=";
-            var licenseData = @"<License>
-                              <Id>77d4c193-6088-4c64-9663-ed7398ae8c1a</Id>
-                              <Type>Trial</Type>
-                              <Expiration>Thu, 31 Dec 2009 23:00:00 GMT</Expiration>
-                              <Quantity>1</Quantity>
-                              <Customer>
-                                <Name>John Doe</Name>
-                                <Email>john@doe.tld</Email>
-                              </Customer>
-                              <LicenseAttributes>
-                                <Attribute name=""Assembly Signature"">123456789</Attribute>
-                              </LicenseAttributes>
-                              <ProductFeatures>
-                                <Feature name=""Sales Module"">yes</Feature>
-                                <Feature name=""Workflow Module"">yes</Feature>
-                                <Feature name=""Maximum Transactions"">10000</Feature>
-                              </ProductFeatures>
-                              <Signature>MEUCIQCa6A7Cts5ex4rGHAPxiXpy+2ocZzTDSP7SsddopKUx5QIgHnqv0DjoOpc+K9wALqajxxvmLCRJAywCX5vDAjmWqr8=</Signature>
-                            </License>";
+            var passPhrase = Guid.NewGuid().ToString();
+            var keyGenerator = Security.Cryptography.KeyGenerator.Create();
+            var keyPair = keyGenerator.GenerateKeyPair();
+            var privateKey = keyPair.ToEncryptedPrivateKeyString(passPhrase);
+            var publicKey = keyPair.ToPublicKeyString();
 
-            var license = License.Load(licenseData);
+            var license = License.New()
+                .WithUniqueIdentifier(new Guid("77d4c193-6088-4c64-9663-ed7398ae8c1a"))
+                .As(LicenseType.Trial)
+                .ExpiresAt(new DateTime(2009, 12, 31, 23, 0, 0, DateTimeKind.Utc))
+                .WithMaximumUtilization(1)
+                .LicensedTo("John Doe", "john@doe.tld")
+                .WithAdditionalAttributes(new Dictionary<string, string>
+                    {
+                        {"Assembly Signature", "123456789"},
+                    })
+                .WithProductFeatures(new Dictionary<string, string>
+                    {
+                        {"Sales Module", "yes"},
+                        {"Workflow Module", "yes"},
+                        {"Maximum Transactions", "10000"},
+                    })
+                .CreateAndSignWithPrivateKey(privateKey, passPhrase);
 
             var validationResults = license
                 .Validate()
@@ -248,6 +321,44 @@ namespace Standard.Licensing.Tests
             Assert.That(count, Is.EqualTo(1));
             Assert.That(validationFailures.ToArray().Length, Is.EqualTo(1));
             Assert.That(validationFailures.ToArray().Length, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ExpirationDate_IsInvalidStartingAtLocalMidnight_OnStoredExpirationDate()
+        {
+            var passPhrase = Guid.NewGuid().ToString();
+            var keyGenerator = Security.Cryptography.KeyGenerator.Create();
+            var keyPair = keyGenerator.GenerateKeyPair();
+            var privateKey = keyPair.ToEncryptedPrivateKeyString(passPhrase);
+
+            var expirationUtc = new DateTime(2030, 6, 1, 0, 0, 0, DateTimeKind.Utc);
+            var license = License.New()
+                .WithUniqueIdentifier(new Guid("77d4c193-6088-4c64-9663-ed7398ae8c1a"))
+                .As(LicenseType.Trial)
+                .ExpiresAt(expirationUtc)
+                .WithMaximumUtilization(1)
+                .LicensedTo("John Doe", "john@doe.tld")
+                .CreateAndSignWithPrivateKey(privateKey, passPhrase);
+
+            var oneMinuteBeforeLocalMidnight = new DateTime(2030, 5, 31, 23, 59, 0, DateTimeKind.Local);
+            var atLocalMidnight = new DateTime(2030, 6, 1, 0, 0, 0, DateTimeKind.Local);
+
+            var validationBeforeMidnight = license
+                .Validate()
+                .ExpirationDate(systemDateTime: oneMinuteBeforeLocalMidnight)
+                .AssertValidLicense().ToList();
+
+            var validationAtMidnight = license
+                .Validate()
+                .ExpirationDate(systemDateTime: atLocalMidnight)
+                .AssertValidLicense().ToList();
+
+            Assert.That(validationBeforeMidnight, Is.Not.Null);
+            Assert.That(validationBeforeMidnight.Count(), Is.EqualTo(0));
+
+            Assert.That(validationAtMidnight, Is.Not.Null);
+            Assert.That(validationAtMidnight.Count(), Is.EqualTo(1));
+            Assert.That(validationAtMidnight.FirstOrDefault(), Is.TypeOf<LicenseExpiredValidationFailure>());
         }
     }
 }

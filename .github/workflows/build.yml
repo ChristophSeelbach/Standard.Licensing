@@ -1,0 +1,114 @@
+# .github/workflows/build.yml
+#
+# Build workflow for Standard.Licensing.
+#
+# - Trigger on pushes, pull requests, and manual dispatch.
+# - Restore, build, test, and pack the NuGet package.
+# - The package project multi-targets .NET 10, 9, 8, 6, .NET Standard 2.0, and .NET Framework 4.6.1/4.8.1.
+# - Upload the generated NuGet packages as a short-lived artifact.
+
+name: Build
+
+on:
+  push:
+    branches: [ '**' ]
+    tags:
+      - 'v*'
+    paths-ignore:
+      - '**/*.gitignore'
+      - '**/*.gitattributes'
+      - '**/*.md'
+      - 'LICENSE'
+  pull_request:
+    branches: [ master, main ]
+    paths-ignore:
+      - '**/*.gitignore'
+      - '**/*.gitattributes'
+      - '**/*.md'
+      - 'LICENSE'
+  workflow_dispatch:
+
+env:
+  PROJECT_PATH:        src/Standard.Licensing/Standard.Licensing.csproj
+  TEST_PROJECT_PATH:   src/Standard.Licensing.Tests/Standard.Licensing.Tests.csproj
+  BUILD_CONFIGURATION: Release
+  ARTIFACT_NAME:       package-standard-licensing
+  PUBLISH_FILES_PATH:  ${{ github.workspace }}/artifacts/package
+
+concurrency:
+  group: standard-licensing-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: 🏗 Build, test, and pack
+    # TODO: Change back when Windows 2025 with VS2026 is available. (4 May 2026)
+    # runs-on: windows-latest
+    runs-on: windows-2025-vs2026
+    permissions:
+      contents: read
+
+    steps:
+      - name: 🧾 Check out repository
+        uses: actions/checkout@v6
+
+      - name: 🛠️ Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            6.0.x
+            8.0.x
+            9.0.x
+            10.0.x
+          dotnet-quality: ga
+
+      - name: 📦 Restore NuGet package project
+        run: |
+          dotnet restore "${{ env.PROJECT_PATH }}"
+
+      - name: 📦 Restore test project
+        run: |
+          dotnet restore "${{ env.TEST_PROJECT_PATH }}"
+
+      - name: 🧩 Build NuGet package project
+        run: |
+          dotnet build `
+            "${{ env.PROJECT_PATH }}" `
+            --configuration ${{ env.BUILD_CONFIGURATION }} `
+            --no-restore
+
+      - name: 🏗 Build test project
+        run: |
+          dotnet build `
+            "${{ env.TEST_PROJECT_PATH }}" `
+            --configuration ${{ env.BUILD_CONFIGURATION }} `
+            --no-restore
+
+      - name: 💯 Run tests
+        timeout-minutes: 5
+        run: |
+          dotnet test `
+            "${{ env.TEST_PROJECT_PATH }}" `
+            --configuration ${{ env.BUILD_CONFIGURATION }} `
+            --no-restore `
+            --no-build `
+            --verbosity detailed
+
+      - name: 🧳 Pack NuGet package
+        run: |
+          dotnet pack `
+            "${{ env.PROJECT_PATH }}" `
+            --configuration ${{ env.BUILD_CONFIGURATION }} `
+            --no-restore `
+            --no-build `
+            --output "${{ env.PUBLISH_FILES_PATH }}"
+
+      - name: 📤 Upload NuGet package artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: |
+            ${{ env.PUBLISH_FILES_PATH }}/*.nupkg
+            ${{ env.PUBLISH_FILES_PATH }}/*.snupkg
+          if-no-files-found: error
+          retention-days: 1

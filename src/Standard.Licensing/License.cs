@@ -1,4 +1,4 @@
-﻿﻿//
+﻿//
 // Copyright © 2012 - 2013 Nauck IT KG     http://www.nauck-it.de
 //
 // Author:
@@ -165,10 +165,17 @@ namespace Standard.Licensing
         }
 
         /// <summary>
-        /// Gets or sets the expiration date of this <see cref="License"/>.
+        /// Gets or sets the expiration date in UTC of this <see cref="License"/>.
         /// Use this property to set the expiration date for a trial license
         /// or the expiration of support & subscription updates for a standard license.
         /// </summary>
+        /// <remarks>
+        /// When setting this value, only the year/month/day components are used.
+        /// Time-of-day and <see cref="DateTimeKind"/> are ignored.
+        /// The stored value is normalized to UTC midnight for that date.
+        /// </remarks>
+        /// <param name="value">The expiration date of the <see cref="License"/>. Only its date component is used.</param>
+        /// <returns>The expiration date of the <see cref="License"/> as UTC midnight.</returns>
         public DateTime Expiration
         {
             get
@@ -176,10 +183,17 @@ namespace Standard.Licensing
                 return
                     DateTime.ParseExact(
                         GetTag("Expiration") ??
-                        DateTime.MaxValue.ToUniversalTime().ToString("r", CultureInfo.InvariantCulture)
-                        , "r", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal);
+                        DateTime.MaxValue.ToString("r", CultureInfo.InvariantCulture)
+                        , "r", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal);
             }
-            set { if (!IsSigned) SetTag("Expiration", value.ToUniversalTime().ToString("r", CultureInfo.InvariantCulture)); }
+            set
+            {
+                if (!IsSigned)
+                {
+					     DateTime normalizedUtcDate = new DateTime(value.Year, value.Month, value.Day, 0, 0, 0, DateTimeKind.Utc);
+                    SetTag("Expiration", normalizedUtcDate.ToString("r", CultureInfo.InvariantCulture));
+                }
+            }
         }
 
         /// <summary>

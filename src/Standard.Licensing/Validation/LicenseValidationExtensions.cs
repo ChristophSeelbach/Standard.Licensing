@@ -59,14 +59,22 @@ namespace Standard.Licensing.Validation
         /// <summary>
         /// Validates if the license has been expired.
         /// </summary>
+        /// <remarks>
+        /// This comparison uses calendar dates only.
+        /// The stored expiration value and system date are compared as <see cref="DateOnly"/> values.
+        /// </remarks>
         /// <param name="validationChain">The current <see cref="IStartValidationChain"/>.</param>
-        /// <param name="systemDateTime">The System DateTime to compare to, default is DateTime.Now. Can be changed to NTP / other internet API times.</param>
+        /// <param name="systemDateTime">The system DateTime to compare to in local time or UTC, default is DateTime.Now. Can be changed to NTP / other internet API times.</param>
         /// <returns>An instance of <see cref="IStartValidationChain"/>.</returns>
         public static IValidationChain ExpirationDate(this IStartValidationChain validationChain, DateTime systemDateTime)
         {
             var validationChainBuilder = (validationChain as ValidationChainBuilder);
             var validator = validationChainBuilder.StartValidatorChain();
-            validator.Validate = license => license.Expiration > systemDateTime;
+#if NET6_0_OR_GREATER
+            validator.Validate = license => DateOnly.FromDateTime(license.Expiration) > DateOnly.FromDateTime(systemDateTime.ToLocalTime());
+#else
+            validator.Validate = license => license.Expiration.Date > systemDateTime.ToLocalTime().Date;
+#endif
 
             validator.FailureResult = new LicenseExpiredValidationFailure()
             {

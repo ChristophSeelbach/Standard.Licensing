@@ -1,4 +1,4 @@
-﻿﻿//
+//
 // Copyright © 2012 - 2013 Nauck IT KG     http://www.nauck-it.de
 //
 // Author:
@@ -69,11 +69,16 @@ namespace Standard.Licensing
         /// <summary>
         /// Sets the expiration date of the <see cref="License"/>.
         /// </summary>
-        /// <param name="date">The expiration date of the <see cref="License"/>.</param>
+        /// <remarks>
+        /// Only the year/month/day components are used.
+        /// Time-of-day and <see cref="DateTimeKind"/> are ignored.
+        /// The value is normalized to UTC midnight for that date.
+        /// </remarks>
+        /// <param name="date">The expiration date of the <see cref="License"/>. Only its date component is used.</param>
         /// <returns>The <see cref="ILicenseBuilder"/>.</returns>
         public ILicenseBuilder ExpiresAt(DateTime date)
         {
-            license.Expiration = date.ToUniversalTime();
+            license.Expiration = new DateTime(date.Year, date.Month, date.Day, 0, 0, 0, DateTimeKind.Utc);
             return this;
         }
 

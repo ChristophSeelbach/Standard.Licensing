@@ -1,4 +1,4 @@
-﻿﻿//
+//
 // Copyright © 2012 - 2013 Nauck IT KG     http://www.nauck-it.de
 //
 // Author:
@@ -52,7 +52,12 @@ namespace Standard.Licensing.Tests
         {
             return DateTime.ParseExact(
                 dateTime.ToUniversalTime().ToString("r", CultureInfo.InvariantCulture)
-                , "r", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal);
+                , "r", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal);
+        }
+
+        private static DateTime NormalizeToUtcMidnight(DateTime dateTime)
+        {
+            return new DateTime(dateTime.Year, dateTime.Month, dateTime.Day, 0, 0, 0, DateTimeKind.Utc);
         }
 
         [Test]
@@ -80,13 +85,25 @@ namespace Standard.Licensing.Tests
             Assert.That(license.VerifySignature(publicKey), Is.True);
         }
 
-        [Test]
-        public void Can_Generate_And_Validate_Signature_With_Standard_License()
+        public static IEnumerable<TestCaseData> LocalAndUtc
+        {
+            get
+            {
+                yield return new TestCaseData(DateTime.Now.AddMinutes(1));
+                yield return new TestCaseData(DateTime.Now.AddYears(1));
+                yield return new TestCaseData(DateTime.UtcNow.AddMinutes(1));
+                yield return new TestCaseData(DateTime.UtcNow.AddYears(1));
+                yield return new TestCaseData(DateTime.SpecifyKind(DateTime.Now.AddMinutes(1), DateTimeKind.Unspecified));
+                yield return new TestCaseData(DateTime.SpecifyKind(DateTime.Now.AddYears(1), DateTimeKind.Unspecified));
+            }
+        }
+
+        [Test, TestCaseSource(nameof(LocalAndUtc))]
+        public void Can_Generate_And_Validate_Signature_With_Standard_License(DateTime expirationDate)
         {
             var licenseId = Guid.NewGuid();
             var customerName = "Max Mustermann";
             var customerEmail = "max@mustermann.tld";
-            var expirationDate = DateTime.Now.AddYears(1);
             var productFeatures = new Dictionary<string, string>
                                       {
                                           {"Sales Module", "yes"},
@@ -119,7 +136,7 @@ namespace Standard.Licensing.Tests
             Assert.That(license.Customer, Is.Not.Null);
             Assert.That(license.Customer.Name, Is.EqualTo(customerName));
             Assert.That(license.Customer.Email, Is.EqualTo(customerEmail));
-            Assert.That(license.Expiration, Is.EqualTo(ConvertToRfc1123(expirationDate)));
+            Assert.That(license.Expiration, Is.EqualTo(NormalizeToUtcMidnight(expirationDate)));
 
             // verify signature
             Assert.That(license.VerifySignature(publicKey), Is.True);
@@ -174,10 +191,38 @@ namespace Standard.Licensing.Tests
             Assert.That(hackedLicense.Customer, Is.Not.Null);
             Assert.That(hackedLicense.Customer.Name, Is.EqualTo(customerName));
             Assert.That(hackedLicense.Customer.Email, Is.EqualTo(customerEmail));
-            Assert.That(hackedLicense.Expiration, Is.EqualTo(ConvertToRfc1123(expirationDate)));
+            Assert.That(hackedLicense.Expiration, Is.EqualTo(NormalizeToUtcMidnight(expirationDate)));
 
             // verify signature
             Assert.That(hackedLicense.VerifySignature(publicKey), Is.False);
+        }
+
+        public static IEnumerable<TestCaseData> AllDateTimeKinds
+        {
+            get
+            {
+                var date = new DateTime(2030, 6, 15, 14, 30, 0);
+                yield return new TestCaseData(DateTime.SpecifyKind(date, DateTimeKind.Utc)).SetName("Utc");
+                yield return new TestCaseData(DateTime.SpecifyKind(date, DateTimeKind.Local)).SetName("Local");
+                yield return new TestCaseData(DateTime.SpecifyKind(date, DateTimeKind.Unspecified)).SetName("Unspecified");
+            }
+        }
+
+        [Test, TestCaseSource(nameof(AllDateTimeKinds))]
+        public void Expiration_NormalizesToUtcMidnight(DateTime expirationDate)
+        {
+            var expectedUtcMidnight = NormalizeToUtcMidnight(expirationDate);
+
+            var licenseViaBuilder = License.New()
+                .ExpiresAt(expirationDate)
+                .CreateAndSignWithPrivateKey(privateKey, passPhrase);
+            Assert.That(licenseViaBuilder.Expiration, Is.EqualTo(expectedUtcMidnight));
+            Assert.That(licenseViaBuilder.Expiration.Kind, Is.EqualTo(DateTimeKind.Utc));
+
+            var licenseViaProperty = License.Load("<License></License>");
+            licenseViaProperty.Expiration = expirationDate;
+            Assert.That(licenseViaProperty.Expiration, Is.EqualTo(expectedUtcMidnight));
+            Assert.That(licenseViaProperty.Expiration.Kind, Is.EqualTo(DateTimeKind.Utc));
         }
     }
 }
