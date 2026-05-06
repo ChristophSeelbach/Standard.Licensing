@@ -30,11 +30,11 @@
 		 - Add custom DateTime to check Expiration date</PackageReleaseNotes>
     <Summary>Easy-to-use licensing library for .NET and .NET Framework products.</Summary>
     <PackageTags>portable,licensing,key</PackageTags>
-    <Title>Standard.Licensing.12noon</Title>
+    <Title>Standard.Licensing</Title>
     <Description>Easy-to-use licensing library for .NET and .NET Framework products.</Description>
-    <PackageId>Standard.Licensing.12noon</PackageId>
+    <PackageId>Standard.Licensing</PackageId>
     <Copyright>Copyright (c) 2018 - 2026</Copyright>
-    <RepositoryUrl>https://github.com/12noonLLC/Standard.Licensing</RepositoryUrl>
+    <RepositoryUrl>https://github.com/junian/Standard.Licensing</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <SignAssembly>true</SignAssembly>
     <AssemblyOriginatorKeyFile>Standard.Licensing.snk</AssemblyOriginatorKeyFile>
@@ -50,8 +50,6 @@
     <ReleaseVersion>$(AssemblyVersion)</ReleaseVersion>
     <Version>$(AssemblyVersion)</Version>
     <FileVersion>$(AssemblyVersion)</FileVersion>
-    <IncludeSymbols>True</IncludeSymbols>
-    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 	
   <ItemGroup>
