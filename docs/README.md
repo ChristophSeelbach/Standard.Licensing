@@ -1,3 +1,12 @@
+# Fork Information
+
+This fork is a for custom adjustments. <br>
+The Breaking Changes so far are:
+- Drop of older .NET Framework support.
+- Replace BouncyCastle with System.Security.Cryptography.
+
+---
+
 <p align="center"><img src="https://raw.githubusercontent.com/junian/Standard.Licensing/master/assets/img/standard-licensing-logo.png" alt="Standard.Licensing Logo"></p>
 
 <h1 align="center">Standard.Licensing</h1>
