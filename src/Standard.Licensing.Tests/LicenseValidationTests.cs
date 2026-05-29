@@ -37,8 +37,8 @@ namespace Standard.Licensing.Tests
     [TestFixture]
     public class LicenseValidationTests
     {
-        private License _expiredLicense;
-        private License _notExpiredLicense;
+        private License _expiredLicense = null!;
+        private License _notExpiredLicense = null!;
 
         private static readonly DateTime ExpirationUtc = new DateTime(1899, 12, 31, 0, 0, 0, DateTimeKind.Utc);
         private static readonly DateTime NotExpiredExpirationUtc = new DateTime(2100, 12, 31, 0, 0, 0, DateTimeKind.Utc);

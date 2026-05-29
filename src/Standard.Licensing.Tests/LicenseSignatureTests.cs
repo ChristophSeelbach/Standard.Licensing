@@ -34,9 +34,9 @@ namespace Standard.Licensing.Tests
     [TestFixture]
     public class LicenseSignatureTests
     {
-        private string passPhrase;
-        private string privateKey;
-        private string publicKey;
+        private string? passPhrase;
+        private string? privateKey;
+        private string? publicKey;
 
         [SetUp]
         public void Init()
@@ -177,7 +177,7 @@ namespace Standard.Licensing.Tests
 
             // manipulate xml
             Assert.That(xmlElement.Element("Quantity"), Is.Not.Null);
-            xmlElement.Element("Quantity").Value = "11"; // now we want to have 11 licenses
+            xmlElement.Element("Quantity")?.Value = "11"; // now we want to have 11 licenses
 
             // load license from manipulated xml
             var hackedLicense = License.Load(xmlElement.ToString());
