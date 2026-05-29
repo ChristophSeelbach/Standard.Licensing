@@ -109,9 +109,8 @@ namespace Standard.Licensing.Security.Cryptography
                 {
                     byte[] decryptedKeyBytes = decryptor.TransformFinalBlock(encryptedData, 0, encryptedData.Length);
 
-                        key.ImportECPrivateKey(decryptedKeyBytes, out _);
-                        return key;
-                    }
+                    ECDsa key = ECDsa.Create();
+                    key.ImportECPrivateKey(decryptedKeyBytes, out _);
                     return key;
                 }
             }
