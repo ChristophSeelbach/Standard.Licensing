@@ -23,17 +23,49 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-using Org.BouncyCastle.Asn1.Pkcs;
-using Org.BouncyCastle.Crypto;
-using Org.BouncyCastle.Security;
-using Org.BouncyCastle.X509;
 using System;
+using System.Security.Cryptography;
 
 namespace Standard.Licensing.Security.Cryptography
 {
     internal static class KeyFactory
     {
-        private static readonly string keyEncryptionAlgorithm = PkcsObjectIdentifiers.PbeWithShaAnd3KeyTripleDesCbc.Id;
+        /// <summary>
+        /// Encrypts and encodes the private key bytes.
+        /// </summary>
+        /// <param name="privateKeyBytes">The private key bytes in DER format.</param>
+        /// <param name="passPhrase">The pass phrase to encrypt the private key.</param>
+        /// <returns>The encrypted private key.</returns>
+        public static string ToEncryptedPrivateKeyStringFromBytes(byte[] privateKeyBytes, string passPhrase)
+        {
+            byte[] salt = RandomNumberGenerator.GetBytes(16);
+
+#pragma warning disable SYSLIB0060
+            using (var pbkdf2 = new Rfc2898DeriveBytes(passPhrase, salt, 10, HashAlgorithmName.SHA256))
+            {
+                byte[] derivedKey = pbkdf2.GetBytes(32);
+
+                using (var aes = Aes.Create())
+                {
+                    aes.Key = derivedKey;
+                    aes.Mode = CipherMode.CBC;
+                    aes.Padding = PaddingMode.PKCS7;
+
+                    using (var encryptor = aes.CreateEncryptor())
+                    {
+                        byte[] encryptedData = encryptor.TransformFinalBlock(privateKeyBytes, 0, privateKeyBytes.Length);
+
+                        byte[] result = new byte[salt.Length + aes.IV.Length + encryptedData.Length];
+                        Buffer.BlockCopy(salt, 0, result, 0, salt.Length);
+                        Buffer.BlockCopy(aes.IV, 0, result, salt.Length, aes.IV.Length);
+                        Buffer.BlockCopy(encryptedData, 0, result, salt.Length + aes.IV.Length, encryptedData.Length);
+
+                        return Convert.ToBase64String(result);
+                    }
+                }
+            }
+#pragma warning restore SYSLIB0060
+        }
 
         /// <summary>
         /// Encrypts and encodes the private key.
@@ -41,16 +73,9 @@ namespace Standard.Licensing.Security.Cryptography
         /// <param name="key">The private key.</param>
         /// <param name="passPhrase">The pass phrase to encrypt the private key.</param>
         /// <returns>The encrypted private key.</returns>
-        public static string ToEncryptedPrivateKeyString(AsymmetricKeyParameter key, string passPhrase)
+        public static string ToEncryptedPrivateKeyString(ECDsa key, string passPhrase)
         {
-            var salt = new byte[16];
-            var secureRandom = SecureRandom.GetInstance("SHA256PRNG");
-            secureRandom.SetSeed(secureRandom.GenerateSeed(16)); //See Bug #135
-            secureRandom.NextBytes(salt);
-
-            return
-                Convert.ToBase64String(PrivateKeyFactory.EncryptKey(keyEncryptionAlgorithm, passPhrase.ToCharArray(),
-                                                                    salt, 10, key));
+            return ToEncryptedPrivateKeyStringFromBytes(key.ExportECPrivateKey(), passPhrase);
         }
 
         /// <summary>
@@ -59,9 +84,41 @@ namespace Standard.Licensing.Security.Cryptography
         /// <param name="privateKey">The encrypted private key.</param>
         /// <param name="passPhrase">The pass phrase to decrypt the private key.</param>
         /// <returns>The private key.</returns>
-        public static AsymmetricKeyParameter FromEncryptedPrivateKeyString(string privateKey, string passPhrase)
+        public static ECDsa FromEncryptedPrivateKeyString(string privateKey, string passPhrase)
         {
-            return PrivateKeyFactory.DecryptKey(passPhrase.ToCharArray(), Convert.FromBase64String(privateKey));
+            byte[] data = Convert.FromBase64String(privateKey);
+
+            byte[] salt = new byte[16];
+            byte[] iv = new byte[16];
+            byte[] encryptedData = new byte[data.Length - 32];
+
+            Buffer.BlockCopy(data, 0, salt, 0, 16);
+            Buffer.BlockCopy(data, 16, iv, 0, 16);
+            Buffer.BlockCopy(data, 32, encryptedData, 0, encryptedData.Length);
+
+#pragma warning disable SYSLIB0060
+            using (var pbkdf2 = new Rfc2898DeriveBytes(passPhrase, salt, 10, HashAlgorithmName.SHA256))
+            {
+                byte[] derivedKey = pbkdf2.GetBytes(32);
+
+                using (var aes = Aes.Create())
+                {
+                    aes.Key = derivedKey;
+                    aes.IV = iv;
+                    aes.Mode = CipherMode.CBC;
+                    aes.Padding = PaddingMode.PKCS7;
+
+                    using (var decryptor = aes.CreateDecryptor())
+                    {
+                        byte[] decryptedKeyBytes = decryptor.TransformFinalBlock(encryptedData, 0, encryptedData.Length);
+
+                        ECDsa key = ECDsa.Create();
+                        key.ImportECPrivateKey(decryptedKeyBytes, out _);
+                        return key;
+                    }
+                }
+            }
+#pragma warning restore SYSLIB0060
         }
 
         /// <summary>
@@ -69,13 +126,10 @@ namespace Standard.Licensing.Security.Cryptography
         /// </summary>
         /// <param name="key">The public key.</param>
         /// <returns>The encoded public key.</returns>
-        public static string ToPublicKeyString(AsymmetricKeyParameter key)
+        public static string ToPublicKeyString(ECDsa key)
         {
-            return
-                Convert.ToBase64String(
-                    SubjectPublicKeyInfoFactory.CreateSubjectPublicKeyInfo(key)
-                                               .ToAsn1Object()
-                                               .GetDerEncoded());
+            byte[] publicKeyBytes = key.ExportSubjectPublicKeyInfo();
+            return Convert.ToBase64String(publicKeyBytes);
         }
 
         /// <summary>
@@ -83,9 +137,12 @@ namespace Standard.Licensing.Security.Cryptography
         /// </summary>
         /// <param name="publicKey">The encoded public key.</param>
         /// <returns>The public key.</returns>
-        public static AsymmetricKeyParameter FromPublicKeyString(string publicKey)
+        public static ECDsa FromPublicKeyString(string publicKey)
         {
-            return PublicKeyFactory.CreateKey(Convert.FromBase64String(publicKey));
+            byte[] publicKeyBytes = Convert.FromBase64String(publicKey);
+            ECDsa key = ECDsa.Create();
+            key.ImportSubjectPublicKeyInfo(publicKeyBytes, out _);
+            return key;
         }
     }
 }

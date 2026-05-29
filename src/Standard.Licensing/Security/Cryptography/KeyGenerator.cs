@@ -23,9 +23,8 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-using Org.BouncyCastle.Crypto;
-using Org.BouncyCastle.Crypto.Generators;
-using Org.BouncyCastle.Security;
+using System;
+using System.Security.Cryptography;
 
 namespace Standard.Licensing.Security.Cryptography
 {
@@ -34,7 +33,7 @@ namespace Standard.Licensing.Security.Cryptography
     /// </summary>
     public class KeyGenerator
     {
-        private readonly IAsymmetricCipherKeyPairGenerator keyGenerator;
+        private readonly string curveName;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="KeyGenerator"/> class
@@ -52,13 +51,12 @@ namespace Standard.Licensing.Security.Cryptography
         /// <remarks>Following key sizes are supported:
         /// - 192
         /// - 224
-        /// - 239
         /// - 256 (default)
         /// - 384
         /// - 521</remarks>
         /// <param name="keySize">The key size.</param>
         public KeyGenerator(int keySize)
-            : this(keySize, SecureRandom.GetInstance("SHA256PRNG").GenerateSeed(32))
+            : this(keySize, RandomNumberGenerator.GetBytes(32))
         {
         }
 
@@ -69,20 +67,22 @@ namespace Standard.Licensing.Security.Cryptography
         /// <remarks>Following key sizes are supported:
         /// - 192
         /// - 224
-        /// - 239
         /// - 256 (default)
         /// - 384
         /// - 521</remarks>
         /// <param name="keySize">The key size.</param>
-        /// <param name="seed">The seed.</param>
+        /// <param name="seed">The seed (unused - kept for API compatibility).</param>
         public KeyGenerator(int keySize, byte[] seed)
         {
-            var secureRandom = SecureRandom.GetInstance("SHA256PRNG");
-            secureRandom.SetSeed(seed);
-
-            var keyParams = new KeyGenerationParameters(secureRandom, keySize);
-            keyGenerator = new ECKeyPairGenerator();
-            keyGenerator.Init(keyParams);
+            curveName = keySize switch
+            {
+                192 => "P192",
+                224 => "P224",
+                256 => "P256",
+                384 => "P384",
+                521 => "P521",
+                _ => throw new ArgumentException($"Unsupported key size: {keySize}. Supported sizes are 192, 224, 256, 384, 521.", nameof(keySize))
+            };
         }
 
         /// <summary>
@@ -96,10 +96,21 @@ namespace Standard.Licensing.Security.Cryptography
         /// <summary>
         /// Generates a private/public key pair for license signing.
         /// </summary>
-        /// <returns>An <see cref="KeyPair"/> containing the keys.</returns>
+        /// <returns>A <see cref="KeyPair"/> containing the keys.</returns>
         public KeyPair GenerateKeyPair()
         {
-            return new KeyPair(keyGenerator.GenerateKeyPair());
+            var curve = curveName switch
+            {
+                "P192" => ECCurve.CreateFromFriendlyName("secp192r1"),
+                "P224" => ECCurve.CreateFromFriendlyName("secp224r1"),
+                "P256" => ECCurve.CreateFromFriendlyName("secp256r1"),
+                "P384" => ECCurve.CreateFromFriendlyName("secp384r1"),
+                "P521" => ECCurve.CreateFromFriendlyName("secp521r1"),
+                _ => throw new InvalidOperationException($"Unsupported curve: {curveName}")
+            };
+
+            var privateKey = ECDsa.Create(curve);
+            return new KeyPair(privateKey);
         }
     }
 }

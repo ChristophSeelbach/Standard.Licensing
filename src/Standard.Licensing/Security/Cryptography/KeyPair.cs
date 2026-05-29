@@ -23,7 +23,7 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-using Org.BouncyCastle.Crypto;
+using System.Security.Cryptography;
 
 namespace Standard.Licensing.Security.Cryptography
 {
@@ -32,17 +32,16 @@ namespace Standard.Licensing.Security.Cryptography
     /// </summary>
     public class KeyPair
     {
-        private readonly AsymmetricCipherKeyPair keyPair;
+        private readonly byte[] privateKeyBytes;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="KeyPair"/> class
-        /// with the provided asymmetric key pair.
+        /// with the provided elliptic curve private key.
         /// </summary>
-        /// <param name="keyPair"></param>
-        internal KeyPair(AsymmetricCipherKeyPair keyPair)
+        /// <param name="privateKey">The ECDsa private key.</param>
+        internal KeyPair(ECDsa privateKey)
         {
-            this.keyPair = keyPair;
-
+            privateKeyBytes = privateKey.ExportECPrivateKey();
         }
 
         /// <summary>
@@ -52,7 +51,7 @@ namespace Standard.Licensing.Security.Cryptography
         /// <returns>The encrypted private key.</returns>
         public string ToEncryptedPrivateKeyString(string passPhrase)
         {
-            return KeyFactory.ToEncryptedPrivateKeyString(keyPair.Private, passPhrase);
+            return KeyFactory.ToEncryptedPrivateKeyStringFromBytes(privateKeyBytes, passPhrase);
         }
 
         /// <summary>
@@ -61,7 +60,11 @@ namespace Standard.Licensing.Security.Cryptography
         /// <returns>The public key.</returns>
         public string ToPublicKeyString()
         {
-            return KeyFactory.ToPublicKeyString(keyPair.Public);
+            using (var ecdsa = ECDsa.Create())
+            {
+                ecdsa.ImportECPrivateKey(privateKeyBytes, out _);
+                return KeyFactory.ToPublicKeyString(ecdsa);
+            }
         }
     }
 }

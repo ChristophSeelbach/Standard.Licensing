@@ -26,11 +26,10 @@
 using System;
 using System.Globalization;
 using System.IO;
+using System.Security.Cryptography;
 using System.Text;
 using System.Xml;
 using System.Xml.Linq;
-using Org.BouncyCastle.Asn1.X9;
-using Org.BouncyCastle.Security;
 using Standard.Licensing.Security.Cryptography;
 
 namespace Standard.Licensing
@@ -41,7 +40,6 @@ namespace Standard.Licensing
     public class License
     {
         private readonly XElement xmlData;
-        private readonly string signatureAlgorithm = X9ObjectIdentifiers.ECDsaWithSha512.Id;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="License"/> class.
@@ -219,14 +217,12 @@ namespace Standard.Licensing
                 if (signTag.Parent != null)
                     signTag.Remove();
 
-                var privKey = KeyFactory.FromEncryptedPrivateKeyString(privateKey, passPhrase);
-
-                var documentToSign = Encoding.UTF8.GetBytes(xmlData.ToString(SaveOptions.DisableFormatting));
-                var signer = SignerUtilities.GetSigner(signatureAlgorithm);
-                signer.Init(true, privKey);
-                signer.BlockUpdate(documentToSign, 0, documentToSign.Length);
-                var signature = signer.GenerateSignature();
-                signTag.Value = Convert.ToBase64String(signature);
+                using (var privKey = KeyFactory.FromEncryptedPrivateKeyString(privateKey, passPhrase))
+                {
+                    var documentToSign = Encoding.UTF8.GetBytes(xmlData.ToString(SaveOptions.DisableFormatting));
+                    var signature = privKey.SignData(documentToSign, HashAlgorithmName.SHA512);
+                    signTag.Value = Convert.ToBase64String(signature);
+                }
             }
             finally
             {
@@ -250,14 +246,12 @@ namespace Standard.Licensing
             {
                 signTag.Remove();
 
-                var pubKey = KeyFactory.FromPublicKeyString(publicKey);
-
-                var documentToSign = Encoding.UTF8.GetBytes(xmlData.ToString(SaveOptions.DisableFormatting));
-                var signer = SignerUtilities.GetSigner(signatureAlgorithm);
-                signer.Init(false, pubKey);
-                signer.BlockUpdate(documentToSign, 0, documentToSign.Length);
-
-                return signer.VerifySignature(Convert.FromBase64String(signTag.Value));
+                using (var pubKey = KeyFactory.FromPublicKeyString(publicKey))
+                {
+                    var documentToSign = Encoding.UTF8.GetBytes(xmlData.ToString(SaveOptions.DisableFormatting));
+                    var signature = Convert.FromBase64String(signTag.Value);
+                    return pubKey.VerifyData(documentToSign, signature, HashAlgorithmName.SHA512);
+                }
             }
             finally
             {
