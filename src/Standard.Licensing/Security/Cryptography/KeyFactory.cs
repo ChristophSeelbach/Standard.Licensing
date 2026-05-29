@@ -1,4 +1,4 @@
-﻿//
+//
 // Copyright © 2012 - 2013 Nauck IT KG     http://www.nauck-it.de
 //
 // Author:
@@ -11,10 +11,10 @@
 // distribute, sublicense, and/or sell copies of the Software, and to
 // permit persons to whom the Software is furnished to do so, subject to
 // the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be
 // included in all copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 // EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 // MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -95,30 +95,26 @@ namespace Standard.Licensing.Security.Cryptography
             Buffer.BlockCopy(data, 0, salt, 0, 16);
             Buffer.BlockCopy(data, 16, iv, 0, 16);
             Buffer.BlockCopy(data, 32, encryptedData, 0, encryptedData.Length);
+            
+            byte[] derivedKey = Rfc2898DeriveBytes.Pbkdf2(passPhrase, salt, 10, HashAlgorithmName.SHA256, 32);
 
-#pragma warning disable SYSLIB0060
-            using (var pbkdf2 = new Rfc2898DeriveBytes(passPhrase, salt, 10, HashAlgorithmName.SHA256))
+            using (var aes = Aes.Create())
             {
-                byte[] derivedKey = pbkdf2.GetBytes(32);
+                aes.Key = derivedKey;
+                aes.IV = iv;
+                aes.Mode = CipherMode.CBC;
+                aes.Padding = PaddingMode.PKCS7;
 
-                using (var aes = Aes.Create())
+                using (var decryptor = aes.CreateDecryptor())
                 {
-                    aes.Key = derivedKey;
-                    aes.IV = iv;
-                    aes.Mode = CipherMode.CBC;
-                    aes.Padding = PaddingMode.PKCS7;
+                    byte[] decryptedKeyBytes = decryptor.TransformFinalBlock(encryptedData, 0, encryptedData.Length);
 
-                    using (var decryptor = aes.CreateDecryptor())
-                    {
-                        byte[] decryptedKeyBytes = decryptor.TransformFinalBlock(encryptedData, 0, encryptedData.Length);
-
-                        ECDsa key = ECDsa.Create();
                         key.ImportECPrivateKey(decryptedKeyBytes, out _);
                         return key;
                     }
+                    return key;
                 }
             }
-#pragma warning restore SYSLIB0060
         }
 
         /// <summary>
